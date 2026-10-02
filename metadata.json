@@ -1,0 +1,8 @@
+{
+  "name": "朴素贝叶斯文本过滤实验室",
+  "description": "交互式贝叶斯教学平台，集成算法可视化、代码引擎与智能诊断，助您深度理解文本分类原理。",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
