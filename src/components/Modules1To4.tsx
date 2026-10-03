@@ -1382,6 +1382,7 @@ export const Modules1To4: React.FC<Modules1To4Props> = ({
             scenario={scenario}
             alpha={alpha}
             setAlpha={setAlpha}
+            inference={inference}
           />
         )}
 

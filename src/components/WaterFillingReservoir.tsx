@@ -12,12 +12,14 @@ import {
   Info,
 } from 'lucide-react';
 import { BayesCaseScenario } from '../data/bayesCases';
+import { BayesInferenceResult } from '../utils/bayesEngine';
 import { KatexMath } from './KatexMath';
 
 interface WaterFillingReservoirProps {
   scenario: BayesCaseScenario;
   alpha: number;
   setAlpha: (val: number) => void;
+  inference?: BayesInferenceResult;
 }
 
 interface ReservoirTank {
@@ -33,22 +35,19 @@ export const WaterFillingReservoir: React.FC<WaterFillingReservoirProps> = ({
   scenario,
   alpha,
   setAlpha,
+  inference,
 }) => {
   const [selectedClass, setSelectedClass] = useState<'pos' | 'neg'>('pos');
   const [activeTankId, setActiveTankId] = useState<string>('zero_1');
 
-  // Total tokens and vocabulary size for the selected class
+  // Total tokens and vocabulary size for the selected class - strictly consistent with bayesEngine
   const isPos = selectedClass === 'pos';
-  const totalTokens = isPos
-    ? scenario.samples
-        .filter((s) => s.actualClass === 1)
-        .reduce((sum, s) => sum + s.text.length, 0)
-    : scenario.samples
-        .filter((s) => s.actualClass === 0)
-        .reduce((sum, s) => sum + s.text.length, 0);
+  const totalTokens = inference
+    ? (isPos ? inference.totalPosTokens : inference.totalNegTokens)
+    : scenario.vocab.reduce((acc, v) => acc + (isPos ? v.posCount : v.negCount), 0);
 
-  const effectiveTotalTokens = Math.max(120, totalTokens);
-  const vocabSize = scenario.vocab.length;
+  const effectiveTotalTokens = Math.max(1, totalTokens);
+  const vocabSize = inference?.vocabSize || scenario.vocab.length;
 
   // Select 5 representative tanks from scenario vocabulary
   const tanks: ReservoirTank[] = useMemo(() => {
@@ -91,7 +90,7 @@ export const WaterFillingReservoir: React.FC<WaterFillingReservoirProps> = ({
         token: low.token,
         role: 'low_freq',
         roleName: '低频稀疏特征',
-        count: 1,
+        count: Math.max(1, isPos ? low.posCount : low.negCount),
         isZero: false,
       },
       {
@@ -135,10 +134,19 @@ export const WaterFillingReservoir: React.FC<WaterFillingReservoirProps> = ({
   // Active tank for drilldown
   const activeTank = tankMetrics.find((t) => t.id === activeTankId) || tankMetrics[4];
 
-  // Total transferred mass from peaks
-  const totalSkimmedProb = tankMetrics
-    .filter((t) => t.delta < 0)
-    .reduce((sum, t) => sum + Math.abs(t.delta), 0);
+  // Total transferred mass across whole vocabulary: sum of all skimmed peak mass = sum of all filled valley mass
+  const totalVocabSkimmedProb = useMemo(() => {
+    let skimmed = 0;
+    for (const v of scenario.vocab) {
+      const c = isPos ? v.posCount : v.negCount;
+      const pRaw = effectiveTotalTokens > 0 ? c / effectiveTotalTokens : 0;
+      const pSmoothed = (c + alpha) / denominator;
+      if (pSmoothed < pRaw) {
+        skimmed += (pRaw - pSmoothed);
+      }
+    }
+    return skimmed;
+  }, [scenario.vocab, isPos, effectiveTotalTokens, alpha, denominator]);
 
   return (
     <div className="bg-white border border-slate-200/90 rounded-xl p-5 space-y-5">
@@ -198,7 +206,7 @@ export const WaterFillingReservoir: React.FC<WaterFillingReservoirProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="text-slate-500">虹吸削峰总转移量：</span>
             <span className="font-mono-tabular font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-              -{(totalSkimmedProb * 100).toFixed(2)}%
+              -{(totalVocabSkimmedProb * 100).toFixed(2)}%
             </span>
           </div>
 
